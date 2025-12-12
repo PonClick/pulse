@@ -54,14 +54,14 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={title ? 'modal-title' : undefined}
         className={cn(
-          'relative z-10 w-full max-w-lg rounded-lg border border-zinc-800 bg-zinc-900 p-6 shadow-xl',
+          'relative z-10 w-full max-w-lg max-h-[90vh] flex flex-col rounded-lg border border-zinc-800 bg-zinc-900 shadow-xl',
           'animate-in fade-in zoom-in-95 duration-200',
           className
         )}
       >
         {/* Header */}
         {title && (
-          <div className="mb-4 flex items-center justify-between">
+          <div className="flex-shrink-0 p-6 pb-0 mb-4 flex items-center justify-between">
             <h2 id="modal-title" className="text-lg font-semibold text-white">
               {title}
             </h2>
@@ -76,7 +76,9 @@ export function Modal({
         )}
 
         {/* Content */}
-        {children}
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
+          {children}
+        </div>
       </div>
     </div>
   )

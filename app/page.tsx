@@ -3,11 +3,24 @@
 import { useState } from 'react'
 import { DashboardLayout } from '@/components/layouts'
 import { ServiceGrid } from '@/components/dashboard'
-import { Button } from '@/components/ui'
+import { AddServiceModal } from '@/components/services'
+import { Button, useToast } from '@/components/ui'
 import { Plus } from 'lucide-react'
+import type { CreateServiceInput, ServiceType } from '@/lib/validations/service'
+
+type Status = 'up' | 'down' | 'pending'
+
+interface Service {
+  id: string
+  name: string
+  type: ServiceType
+  status: Status
+  responseTime: number | null
+  uptime24h: number | null
+}
 
 // Mock data for initial development
-const mockServices = [
+const mockServices: Service[] = [
   {
     id: '1',
     name: 'Production API',
@@ -69,7 +82,9 @@ const mockHeartbeats: Record<string, { responseTime: number }[]> = {
 }
 
 export default function DashboardPage(): React.ReactElement {
-  const [services] = useState(mockServices)
+  const [services, setServices] = useState(mockServices)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const { addToast } = useToast()
 
   // Calculate health score (percentage of services that are up)
   const upCount = services.filter((s) => s.status === 'up').length
@@ -80,9 +95,18 @@ export default function DashboardPage(): React.ReactElement {
     console.log('Service clicked:', id)
   }
 
-  const handleAddService = (): void => {
-    // TODO: Open add service modal
-    console.log('Add service clicked')
+  const handleAddService = async (data: CreateServiceInput): Promise<void> => {
+    // For now, add to local state (later: save to Supabase)
+    const newService = {
+      id: crypto.randomUUID(),
+      name: data.name,
+      type: data.type,
+      status: 'pending' as const,
+      responseTime: null,
+      uptime24h: null,
+    }
+    setServices((prev) => [...prev, newService])
+    addToast('success', `Service "${data.name}" created successfully`)
   }
 
   return (
@@ -96,7 +120,7 @@ export default function DashboardPage(): React.ReactElement {
               Monitor all your services in one place
             </p>
           </div>
-          <Button variant="primary" onClick={handleAddService}>
+          <Button variant="primary" onClick={() => setIsAddModalOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Service
           </Button>
@@ -109,6 +133,13 @@ export default function DashboardPage(): React.ReactElement {
           onServiceClick={handleServiceClick}
         />
       </div>
+
+      {/* Add Service Modal */}
+      <AddServiceModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSubmit={handleAddService}
+      />
     </DashboardLayout>
   )
 }

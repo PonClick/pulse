@@ -1,13 +1,16 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import type { Tables } from '@/lib/supabase/database.types'
 import type { CreateServiceInput } from '@/lib/validations/service'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 
 type Service = Tables<'services'>
 
 interface Heartbeat {
   id: string
+  service_id: string | null
   status: string
   response_time_ms: number | null
   created_at: string | null
@@ -28,6 +31,7 @@ export function useServices(): UseServicesReturn {
   const [heartbeats, setHeartbeats] = useState<Record<string, Heartbeat[]>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const channelRef = useRef<RealtimeChannel | null>(null)
 
   const fetchServices = useCallback(async (): Promise<void> => {
     try {
@@ -76,8 +80,7 @@ export function useServices(): UseServicesReturn {
         }
 
         const newService = await response.json()
-        setServices((prev) => [newService, ...prev])
-        setHeartbeats((prev) => ({ ...prev, [newService.id]: [] }))
+        // Don't update state here - realtime subscription will handle it
         return newService
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to create service')
@@ -97,12 +100,7 @@ export function useServices(): UseServicesReturn {
         throw new Error('Failed to delete service')
       }
 
-      setServices((prev) => prev.filter((s) => s.id !== id))
-      setHeartbeats((prev) => {
-        const updated = { ...prev }
-        delete updated[id]
-        return updated
-      })
+      // Don't update state here - realtime subscription will handle it
       return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete service')
@@ -110,6 +108,79 @@ export function useServices(): UseServicesReturn {
     }
   }, [])
 
+  // Setup realtime subscriptions
+  useEffect(() => {
+    const supabase = createClient()
+
+    // Create channel for realtime updates
+    const channel = supabase
+      .channel('dashboard-changes')
+      // Subscribe to services changes
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'services' },
+        (payload) => {
+          const newService = payload.new as Service
+          setServices((prev) => {
+            // Check if service already exists (prevent duplicates)
+            if (prev.some((s) => s.id === newService.id)) return prev
+            return [newService, ...prev]
+          })
+          setHeartbeats((prev) => ({ ...prev, [newService.id]: [] }))
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'services' },
+        (payload) => {
+          const updatedService = payload.new as Service
+          setServices((prev) =>
+            prev.map((s) => (s.id === updatedService.id ? updatedService : s))
+          )
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'services' },
+        (payload) => {
+          const deletedId = payload.old.id as string
+          setServices((prev) => prev.filter((s) => s.id !== deletedId))
+          setHeartbeats((prev) => {
+            const updated = { ...prev }
+            delete updated[deletedId]
+            return updated
+          })
+        }
+      )
+      // Subscribe to heartbeats changes (for live status updates)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'heartbeats' },
+        (payload) => {
+          const newHeartbeat = payload.new as Heartbeat
+          if (newHeartbeat.service_id) {
+            setHeartbeats((prev) => {
+              const serviceHeartbeats = prev[newHeartbeat.service_id!] || []
+              // Keep only last 20 heartbeats
+              const updated = [...serviceHeartbeats, newHeartbeat].slice(-20)
+              return { ...prev, [newHeartbeat.service_id!]: updated }
+            })
+          }
+        }
+      )
+      .subscribe()
+
+    channelRef.current = channel
+
+    // Cleanup on unmount
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+      }
+    }
+  }, [])
+
+  // Initial fetch
   useEffect(() => {
     fetchServices()
   }, [fetchServices])

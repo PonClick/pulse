@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,16 +11,10 @@ import { Select } from '@/components/ui/select'
 import { Toggle } from '@/components/ui/toggle'
 import { MonitorTypeSelector } from './monitor-type-selector'
 import {
-  httpServiceSchema,
-  tcpServiceSchema,
-  pingServiceSchema,
-  dnsServiceSchema,
-  dockerServiceSchema,
-  heartbeatServiceSchema,
+  serviceTypes,
   type ServiceType,
   type CreateServiceInput,
 } from '@/lib/validations/service'
-import type { z } from 'zod'
 
 interface AddServiceModalProps {
   isOpen: boolean
@@ -54,17 +49,33 @@ const dnsRecordOptions = [
   { value: 'NS', label: 'NS (Nameserver)' },
 ]
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnySchema = z.ZodType<any, any, any>
+// Flexible form schema - validates common fields, type-specific validation in submit
+const formSchema = z.object({
+  name: z.string().min(1, 'Name is required').max(255),
+  description: z.string().max(500).optional(),
+  type: z.enum(serviceTypes),
+  intervalSeconds: z.number().min(10).max(3600),
+  timeoutSeconds: z.number().min(1).max(60),
+  retries: z.number().min(0).max(5),
+  // HTTP
+  url: z.string().optional(),
+  method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD']).optional(),
+  expectedStatus: z.string().optional(),
+  keyword: z.string().optional(),
+  verifySsl: z.boolean().optional(),
+  // TCP/Ping/DNS
+  hostname: z.string().optional(),
+  port: z.number().optional(),
+  // DNS
+  dnsRecordType: z.enum(['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS']).optional(),
+  dnsServer: z.string().optional(),
+  expectedValue: z.string().optional(),
+  // Docker
+  dockerHost: z.string().optional(),
+  containerName: z.string().optional(),
+})
 
-const schemaMap: Record<ServiceType, AnySchema> = {
-  http: httpServiceSchema,
-  tcp: tcpServiceSchema,
-  ping: pingServiceSchema,
-  dns: dnsServiceSchema,
-  docker: dockerServiceSchema,
-  heartbeat: heartbeatServiceSchema,
-}
+type FormData = z.infer<typeof formSchema>
 
 export function AddServiceModal({
   isOpen,
@@ -74,8 +85,7 @@ export function AddServiceModal({
   const [selectedType, setSelectedType] = useState<ServiceType | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [verifySsl, setVerifySsl] = useState(true)
-
-  const schema = selectedType ? schemaMap[selectedType] : heartbeatServiceSchema
+  const [formError, setFormError] = useState<string | null>(null)
 
   const {
     register,
@@ -83,8 +93,8 @@ export function AddServiceModal({
     reset,
     setValue,
     formState: { errors },
-  } = useForm({
-    resolver: zodResolver(schema),
+  } = useForm<FormData>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
       intervalSeconds: 60,
       timeoutSeconds: 10,
@@ -97,32 +107,130 @@ export function AddServiceModal({
     },
   })
 
-  const handleClose = (): void => {
+  const handleClose = useCallback((): void => {
     reset()
     setSelectedType(null)
     setVerifySsl(true)
+    setFormError(null)
     onClose()
+  }, [reset, onClose])
+
+  const validateTypeSpecificFields = (data: FormData): string | null => {
+    switch (data.type) {
+      case 'http':
+        if (!data.url) return 'URL is required'
+        try {
+          new URL(data.url)
+        } catch {
+          return 'Please enter a valid URL'
+        }
+        break
+      case 'tcp':
+        if (!data.hostname) return 'Hostname is required'
+        if (!data.port || data.port < 1 || data.port > 65535) return 'Valid port (1-65535) is required'
+        break
+      case 'ping':
+        if (!data.hostname) return 'Hostname is required'
+        break
+      case 'dns':
+        if (!data.hostname) return 'Hostname is required'
+        break
+      case 'docker':
+        if (!data.dockerHost) return 'Docker host is required'
+        if (!data.containerName) return 'Container name is required'
+        break
+    }
+    return null
   }
 
-  const handleFormSubmit = async (data: Record<string, unknown>): Promise<void> => {
-    if (!selectedType) return
+  const handleFormSubmit = async (data: FormData): Promise<void> => {
+    if (!selectedType) {
+      setFormError('Please select a monitor type')
+      return
+    }
 
+    // Validate type-specific fields
+    const validationError = validateTypeSpecificFields(data)
+    if (validationError) {
+      setFormError(validationError)
+      return
+    }
+
+    setFormError(null)
     setIsSubmitting(true)
+
     try {
-      // Transform expected status from string to array
-      const formData = {
-        ...data,
-        type: selectedType,
-        verifySsl: selectedType === 'http' ? verifySsl : undefined,
-        expectedStatus:
-          selectedType === 'http' && typeof data.expectedStatus === 'string'
-            ? data.expectedStatus.split(',').map((s: string) => parseInt(s.trim(), 10))
-            : undefined,
+      // Build the final data object based on type
+      const baseData = {
+        name: data.name,
+        description: data.description,
+        intervalSeconds: data.intervalSeconds,
+        timeoutSeconds: data.timeoutSeconds,
+        retries: data.retries,
       }
-      await onSubmit(formData as CreateServiceInput)
+
+      let formData: CreateServiceInput
+
+      switch (selectedType) {
+        case 'http':
+          formData = {
+            ...baseData,
+            type: 'http',
+            url: data.url!,
+            method: data.method || 'GET',
+            expectedStatus: data.expectedStatus
+              ? data.expectedStatus.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n))
+              : [200, 201, 204],
+            keyword: data.keyword,
+            verifySsl: verifySsl,
+          }
+          break
+        case 'tcp':
+          formData = {
+            ...baseData,
+            type: 'tcp',
+            hostname: data.hostname!,
+            port: data.port!,
+          }
+          break
+        case 'ping':
+          formData = {
+            ...baseData,
+            type: 'ping',
+            hostname: data.hostname!,
+          }
+          break
+        case 'dns':
+          formData = {
+            ...baseData,
+            type: 'dns',
+            hostname: data.hostname!,
+            dnsRecordType: data.dnsRecordType || 'A',
+            dnsServer: data.dnsServer || '1.1.1.1',
+            expectedValue: data.expectedValue,
+          }
+          break
+        case 'docker':
+          formData = {
+            ...baseData,
+            type: 'docker',
+            dockerHost: data.dockerHost!,
+            containerName: data.containerName!,
+          }
+          break
+        case 'heartbeat':
+          formData = {
+            ...baseData,
+            type: 'heartbeat',
+          }
+          break
+      }
+
+      await onSubmit(formData)
       handleClose()
     } catch (error) {
       console.error('Failed to create service:', error)
+      setFormError('Failed to create service. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -131,6 +239,7 @@ export function AddServiceModal({
   const handleTypeChange = (type: ServiceType): void => {
     setSelectedType(type)
     setValue('type', type)
+    setFormError(null)
   }
 
   return (
@@ -310,6 +419,13 @@ export function AddServiceModal({
                 {...register('retries', { valueAsNumber: true })}
               />
             </div>
+
+            {/* Form Error */}
+            {formError && (
+              <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3">
+                <p className="text-sm text-red-500">{formError}</p>
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">

@@ -69,7 +69,35 @@ export const createServiceSchema = z.discriminatedUnion('type', [
   heartbeatServiceSchema,
 ])
 
+// Update schema - all fields optional for PATCH operations
+export const updateServiceSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(500).optional(),
+  intervalSeconds: z.number().min(10).max(3600).optional(),
+  timeoutSeconds: z.number().min(1).max(60).optional(),
+  retries: z.number().min(0).max(5).optional(),
+  // HTTP
+  url: z.string().url().optional(),
+  method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD']).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+  body: z.string().optional(),
+  expectedStatus: z.array(z.number()).optional(),
+  keyword: z.string().optional(),
+  verifySsl: z.boolean().optional(),
+  // TCP/Ping/DNS
+  hostname: z.string().optional(),
+  port: z.number().min(1).max(65535).optional(),
+  // DNS
+  dnsRecordType: z.enum(['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS']).optional(),
+  dnsServer: z.string().optional(),
+  expectedValue: z.string().optional(),
+  // Docker
+  dockerHost: z.string().optional(),
+  containerName: z.string().optional(),
+})
+
 export type CreateServiceInput = z.infer<typeof createServiceSchema>
+export type UpdateServiceInput = z.infer<typeof updateServiceSchema>
 export type HttpServiceInput = z.infer<typeof httpServiceSchema>
 export type TcpServiceInput = z.infer<typeof tcpServiceSchema>
 export type PingServiceInput = z.infer<typeof pingServiceSchema>

@@ -1,9 +1,6 @@
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 -- Services table
 CREATE TABLE services (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   description TEXT,
@@ -38,7 +35,7 @@ CREATE TABLE services (
 
 -- Heartbeats table
 CREATE TABLE heartbeats (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   service_id UUID REFERENCES services(id) ON DELETE CASCADE,
   status VARCHAR(20) NOT NULL,
   response_time_ms INTEGER,
@@ -53,7 +50,7 @@ ON heartbeats(service_id, created_at DESC);
 
 -- Incidents table
 CREATE TABLE incidents (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   service_id UUID REFERENCES services(id) ON DELETE CASCADE,
   started_at TIMESTAMPTZ NOT NULL,
   ended_at TIMESTAMPTZ,
@@ -67,7 +64,7 @@ CREATE TABLE incidents (
 
 -- Alert channels table
 CREATE TABLE alert_channels (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   type VARCHAR(50) NOT NULL,
   name VARCHAR(255) NOT NULL,

@@ -63,6 +63,8 @@ const formSchema = z.object({
   expectedStatus: z.string().optional(),
   keyword: z.string().optional(),
   verifySsl: z.boolean().optional(),
+  headers: z.string().optional(), // JSON string of headers
+  body: z.string().optional(),
   // TCP/Ping/DNS
   hostname: z.string().optional(),
   port: z.number().optional(),
@@ -73,6 +75,8 @@ const formSchema = z.object({
   // Docker
   dockerHost: z.string().optional(),
   containerName: z.string().optional(),
+  // SSL
+  sslExpiryWarningDays: z.number().min(1).max(365).optional(),
 })
 
 type FormData = z.infer<typeof formSchema>
@@ -139,6 +143,9 @@ export function AddServiceModal({
         if (!data.dockerHost) return 'Docker host is required'
         if (!data.containerName) return 'Container name is required'
         break
+      case 'ssl':
+        if (!data.hostname) return 'Hostname is required'
+        break
     }
     return null
   }
@@ -173,6 +180,16 @@ export function AddServiceModal({
 
       switch (selectedType) {
         case 'http':
+          // Parse headers if provided
+          let parsedHeaders: Record<string, string> | undefined
+          if (data.headers) {
+            try {
+              parsedHeaders = JSON.parse(data.headers)
+            } catch {
+              setFormError('Invalid headers JSON format')
+              return
+            }
+          }
           formData = {
             ...baseData,
             type: 'http',
@@ -183,6 +200,8 @@ export function AddServiceModal({
               : [200, 201, 204],
             keyword: data.keyword,
             verifySsl: verifySsl,
+            headers: parsedHeaders,
+            body: data.body,
           }
           break
         case 'tcp':
@@ -222,6 +241,15 @@ export function AddServiceModal({
           formData = {
             ...baseData,
             type: 'heartbeat',
+          }
+          break
+        case 'ssl':
+          formData = {
+            ...baseData,
+            type: 'ssl',
+            hostname: data.hostname!,
+            port: data.port || 443,
+            sslExpiryWarningDays: data.sslExpiryWarningDays || 30,
           }
           break
       }
@@ -299,6 +327,30 @@ export function AddServiceModal({
                     placeholder="Text to search in response"
                     {...register('keyword')}
                   />
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">
+                      Headers (optional)
+                    </label>
+                    <textarea
+                      className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      placeholder='{"Authorization": "Bearer token", "Content-Type": "application/json"}'
+                      rows={3}
+                      {...register('headers')}
+                    />
+                    <p className="text-xs text-zinc-500">Enter headers as JSON object</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">
+                      Request Body (optional)
+                    </label>
+                    <textarea
+                      className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      placeholder='{"key": "value"}'
+                      rows={3}
+                      {...register('body')}
+                    />
+                    <p className="text-xs text-zinc-500">For POST, PUT, PATCH requests</p>
+                  </div>
                   <Toggle
                     label="Verify SSL Certificate"
                     checked={verifySsl}
@@ -378,6 +430,36 @@ export function AddServiceModal({
                     error={errors.containerName?.message as string}
                     {...register('containerName')}
                   />
+                </>
+              )}
+
+              {/* SSL Fields */}
+              {selectedType === 'ssl' && (
+                <>
+                  <Input
+                    label="Hostname"
+                    placeholder="example.com"
+                    error={errors.hostname?.message as string}
+                    {...register('hostname')}
+                  />
+                  <Input
+                    label="Port"
+                    type="number"
+                    placeholder="443"
+                    {...register('port', { valueAsNumber: true })}
+                  />
+                  <Input
+                    label="Warning Days Before Expiry"
+                    type="number"
+                    placeholder="30"
+                    {...register('sslExpiryWarningDays', { valueAsNumber: true })}
+                  />
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+                    <p className="text-sm text-zinc-400">
+                      SSL Certificate monitors check when your certificate expires.
+                      You&apos;ll be notified when it&apos;s within the warning period.
+                    </p>
+                  </div>
                 </>
               )}
 

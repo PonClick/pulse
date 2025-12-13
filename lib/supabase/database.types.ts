@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -41,6 +61,39 @@ export type Database = {
           name?: string
           type?: string
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      groups: {
+        Row: {
+          collapsed: boolean | null
+          color: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          collapsed?: boolean | null
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          collapsed?: boolean | null
+          color?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          sort_order?: number | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -143,6 +196,54 @@ export type Database = {
           },
         ]
       }
+      maintenance_windows: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          end_time: string
+          id: string
+          service_id: string | null
+          start_time: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          end_time: string
+          id?: string
+          service_id?: string | null
+          start_time: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          end_time?: string
+          id?: string
+          service_id?: string | null
+          start_time?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maintenance_windows_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "service_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_windows_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_alert_channels: {
         Row: {
           alert_channel_id: string
@@ -191,6 +292,7 @@ export type Database = {
           docker_host: string | null
           expected_status: number[] | null
           expected_value: string | null
+          group_id: string | null
           headers: Json | null
           hostname: string | null
           id: string
@@ -206,6 +308,7 @@ export type Database = {
           port: number | null
           retries: number | null
           ssl_expiry_alert_days: number | null
+          ssl_expiry_warning_days: number | null
           tags: string[] | null
           timeout_seconds: number | null
           type: string
@@ -224,6 +327,7 @@ export type Database = {
           docker_host?: string | null
           expected_status?: number[] | null
           expected_value?: string | null
+          group_id?: string | null
           headers?: Json | null
           hostname?: string | null
           id?: string
@@ -239,6 +343,7 @@ export type Database = {
           port?: number | null
           retries?: number | null
           ssl_expiry_alert_days?: number | null
+          ssl_expiry_warning_days?: number | null
           tags?: string[] | null
           timeout_seconds?: number | null
           type: string
@@ -257,6 +362,7 @@ export type Database = {
           docker_host?: string | null
           expected_status?: number[] | null
           expected_value?: string | null
+          group_id?: string | null
           headers?: Json | null
           hostname?: string | null
           id?: string
@@ -272,6 +378,7 @@ export type Database = {
           port?: number | null
           retries?: number | null
           ssl_expiry_alert_days?: number | null
+          ssl_expiry_warning_days?: number | null
           tags?: string[] | null
           timeout_seconds?: number | null
           type?: string
@@ -280,7 +387,15 @@ export type Database = {
           user_id?: string | null
           verify_ssl?: boolean | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "services_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -299,7 +414,10 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      is_service_in_maintenance: {
+        Args: { p_service_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
@@ -428,7 +546,11 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
 } as const
+

@@ -15,10 +15,10 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantClasses: Record<Variant, string> = {
-  primary: 'bg-emerald-500 text-white hover:bg-emerald-600 focus:ring-emerald-500',
-  secondary: 'bg-zinc-800 text-white hover:bg-zinc-700 focus:ring-zinc-500',
-  ghost: 'bg-transparent text-zinc-400 hover:bg-zinc-800 hover:text-white focus:ring-zinc-500',
-  danger: 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-500',
+  primary: 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 focus:ring-[var(--primary)]',
+  secondary: 'bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)] focus:ring-[var(--border)]',
+  ghost: 'bg-transparent text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] focus:ring-[var(--border)]',
+  danger: 'bg-[var(--status-down)] text-white hover:opacity-90 focus:ring-[var(--status-down)]',
 }
 
 const sizeClasses: Record<Size, string> = {
@@ -46,7 +46,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         className={cn(
           'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors',
-          'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-zinc-950',
+          'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--background)]',
           'disabled:opacity-50 disabled:cursor-not-allowed',
           variantClasses[variant],
           sizeClasses[size],

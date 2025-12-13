@@ -8,6 +8,7 @@ import {
   Server,
   Container,
   Heart,
+  ShieldCheck,
 } from 'lucide-react'
 import type { ServiceType } from '@/lib/validations/service'
 
@@ -54,6 +55,12 @@ const monitorTypes: MonitorType[] = [
     label: 'Heartbeat',
     description: 'Receive push notifications',
     icon: Heart,
+  },
+  {
+    type: 'ssl',
+    label: 'SSL Certificate',
+    description: 'Monitor certificate expiry',
+    icon: ShieldCheck,
   },
 ]
 

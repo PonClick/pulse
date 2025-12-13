@@ -1,12 +1,13 @@
 import { z } from 'zod'
 
-export const serviceTypes = ['http', 'tcp', 'ping', 'dns', 'docker', 'heartbeat'] as const
+export const serviceTypes = ['http', 'tcp', 'ping', 'dns', 'docker', 'heartbeat', 'ssl'] as const
 export type ServiceType = (typeof serviceTypes)[number]
 
 // Base schema for all services
 const baseServiceSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   description: z.string().max(500).optional(),
+  groupId: z.string().uuid().optional().nullable(),
   intervalSeconds: z.number().min(10).max(3600).default(60),
   timeoutSeconds: z.number().min(1).max(60).default(10),
   retries: z.number().min(0).max(5).default(0),
@@ -59,6 +60,14 @@ export const heartbeatServiceSchema = baseServiceSchema.extend({
   // Heartbeat services receive pings, so minimal config
 })
 
+// SSL specific
+export const sslServiceSchema = baseServiceSchema.extend({
+  type: z.literal('ssl'),
+  hostname: z.string().min(1, 'Hostname is required'),
+  port: z.number().min(1).max(65535).default(443),
+  sslExpiryWarningDays: z.number().min(1).max(365).default(30),
+})
+
 // Union schema for all service types
 export const createServiceSchema = z.discriminatedUnion('type', [
   httpServiceSchema,
@@ -67,12 +76,14 @@ export const createServiceSchema = z.discriminatedUnion('type', [
   dnsServiceSchema,
   dockerServiceSchema,
   heartbeatServiceSchema,
+  sslServiceSchema,
 ])
 
 // Update schema - all fields optional for PATCH operations
 export const updateServiceSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().max(500).optional(),
+  groupId: z.string().uuid().optional().nullable(),
   intervalSeconds: z.number().min(10).max(3600).optional(),
   timeoutSeconds: z.number().min(1).max(60).optional(),
   retries: z.number().min(0).max(5).optional(),
@@ -94,6 +105,8 @@ export const updateServiceSchema = z.object({
   // Docker
   dockerHost: z.string().optional(),
   containerName: z.string().optional(),
+  // SSL
+  sslExpiryWarningDays: z.number().min(1).max(365).optional(),
 })
 
 export type CreateServiceInput = z.infer<typeof createServiceSchema>
@@ -104,3 +117,4 @@ export type PingServiceInput = z.infer<typeof pingServiceSchema>
 export type DnsServiceInput = z.infer<typeof dnsServiceSchema>
 export type DockerServiceInput = z.infer<typeof dockerServiceSchema>
 export type HeartbeatServiceInput = z.infer<typeof heartbeatServiceSchema>
+export type SslServiceInput = z.infer<typeof sslServiceSchema>

@@ -1,10 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import type { Tables } from '@/lib/supabase/database.types'
 import type { CreateServiceInput } from '@/lib/validations/service'
-import type { RealtimeChannel } from '@supabase/supabase-js'
 
 type Service = Tables<'services'>
 
@@ -26,16 +24,20 @@ interface UseServicesReturn {
   deleteService: (id: string) => Promise<boolean>
 }
 
+const POLLING_INTERVAL = 30000 // 30 seconds
+
 export function useServices(): UseServicesReturn {
   const [services, setServices] = useState<Service[]>([])
   const [heartbeats, setHeartbeats] = useState<Record<string, Heartbeat[]>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const channelRef = useRef<RealtimeChannel | null>(null)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
-  const fetchServices = useCallback(async (): Promise<void> => {
+  const fetchServices = useCallback(async (showLoading = false): Promise<void> => {
     try {
+      if (showLoading) setIsLoading(true)
       setError(null)
+
       const response = await fetch('/api/services')
       if (!response.ok) {
         throw new Error('Failed to fetch services')
@@ -80,7 +82,8 @@ export function useServices(): UseServicesReturn {
         }
 
         const newService = await response.json()
-        // Don't update state here - realtime subscription will handle it
+        setServices((prev) => [newService, ...prev])
+        setHeartbeats((prev) => ({ ...prev, [newService.id]: [] }))
         return newService
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to create service')
@@ -100,7 +103,12 @@ export function useServices(): UseServicesReturn {
         throw new Error('Failed to delete service')
       }
 
-      // Don't update state here - realtime subscription will handle it
+      setServices((prev) => prev.filter((s) => s.id !== id))
+      setHeartbeats((prev) => {
+        const updated = { ...prev }
+        delete updated[id]
+        return updated
+      })
       return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete service')
@@ -108,81 +116,22 @@ export function useServices(): UseServicesReturn {
     }
   }, [])
 
-  // Setup realtime subscriptions
-  useEffect(() => {
-    const supabase = createClient()
-
-    // Create channel for realtime updates
-    const channel = supabase
-      .channel('dashboard-changes')
-      // Subscribe to services changes
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'services' },
-        (payload) => {
-          const newService = payload.new as Service
-          setServices((prev) => {
-            // Check if service already exists (prevent duplicates)
-            if (prev.some((s) => s.id === newService.id)) return prev
-            return [newService, ...prev]
-          })
-          setHeartbeats((prev) => ({ ...prev, [newService.id]: [] }))
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'services' },
-        (payload) => {
-          const updatedService = payload.new as Service
-          setServices((prev) =>
-            prev.map((s) => (s.id === updatedService.id ? updatedService : s))
-          )
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'services' },
-        (payload) => {
-          const deletedId = payload.old.id as string
-          setServices((prev) => prev.filter((s) => s.id !== deletedId))
-          setHeartbeats((prev) => {
-            const updated = { ...prev }
-            delete updated[deletedId]
-            return updated
-          })
-        }
-      )
-      // Subscribe to heartbeats changes (for live status updates)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'heartbeats' },
-        (payload) => {
-          const newHeartbeat = payload.new as Heartbeat
-          if (newHeartbeat.service_id) {
-            setHeartbeats((prev) => {
-              const serviceHeartbeats = prev[newHeartbeat.service_id!] || []
-              // Keep only last 20 heartbeats
-              const updated = [...serviceHeartbeats, newHeartbeat].slice(-20)
-              return { ...prev, [newHeartbeat.service_id!]: updated }
-            })
-          }
-        }
-      )
-      .subscribe()
-
-    channelRef.current = channel
-
-    // Cleanup on unmount
-    return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-      }
-    }
-  }, [])
-
   // Initial fetch
   useEffect(() => {
-    fetchServices()
+    fetchServices(true)
+  }, [fetchServices])
+
+  // Setup polling every 30 seconds
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      fetchServices(false) // Don't show loading spinner for background refreshes
+    }, POLLING_INTERVAL)
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
+    }
   }, [fetchServices])
 
   return {
@@ -190,7 +139,7 @@ export function useServices(): UseServicesReturn {
     heartbeats,
     isLoading,
     error,
-    refetch: fetchServices,
+    refetch: () => fetchServices(false),
     createService,
     deleteService,
   }

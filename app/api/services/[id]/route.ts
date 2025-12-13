@@ -76,6 +76,8 @@ export async function PATCH(
     if ('expectedStatus' in data) updateData.expected_status = data.expectedStatus
     if ('keyword' in data) updateData.keyword = data.keyword
     if ('verifySsl' in data) updateData.verify_ssl = data.verifySsl
+    if ('headers' in data) updateData.headers = data.headers
+    if ('body' in data) updateData.body = data.body
     if ('hostname' in data) updateData.hostname = data.hostname
     if ('port' in data) updateData.port = data.port
     if ('dnsRecordType' in data) updateData.dns_record_type = data.dnsRecordType
@@ -83,6 +85,8 @@ export async function PATCH(
     if ('expectedValue' in data) updateData.expected_value = data.expectedValue
     if ('dockerHost' in data) updateData.docker_host = data.dockerHost
     if ('containerName' in data) updateData.container_name = data.containerName
+    if ('groupId' in data) updateData.group_id = data.groupId
+    if ('sslExpiryWarningDays' in data) updateData.ssl_expiry_warning_days = data.sslExpiryWarningDays
 
     const { data: service, error } = await supabase
       .from('services')

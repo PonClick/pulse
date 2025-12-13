@@ -1,0 +1,80 @@
+# Pulse - Self-hosted Server Monitoring Dashboard
+# Docker Compose for Production Deployment
+#
+# Usage:
+#   docker compose up -d
+#
+# This includes:
+#   - Pulse Next.js app
+#   - PostgreSQL database
+#   - Automatic health checks via cron
+#
+# For development with Supabase features (auth, RLS):
+#   npm run db:start (uses Supabase CLI)
+
+services:
+  pulse:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pulse
+    restart: unless-stopped
+    ports:
+      - "3200:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SUPABASE_URL=http://postgres:5432
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-your-anon-key}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-your-service-key}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-pulse}@postgres:5432/pulse
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - pulse-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: pulse-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pulse}
+      - POSTGRES_DB=pulse
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pulse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pulse-network
+
+  # Cron service for scheduled health checks
+  cron:
+    image: alpine:3.19
+    container_name: pulse-cron
+    restart: unless-stopped
+    depends_on:
+      pulse:
+        condition: service_healthy
+    command: >
+      sh -c 'echo "* * * * * wget -q -O- http://pulse:3000/api/cron/check > /dev/null 2>&1" | crontab - && crond -f -l 2'
+    networks:
+      - pulse-network
+
+volumes:
+  postgres-data:
+
+networks:
+  pulse-network:
+    driver: bridge

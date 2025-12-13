@@ -19,8 +19,8 @@ export function Card({
     <Component
       onClick={onClick}
       className={cn(
-        'rounded-lg border border-zinc-800 bg-zinc-900 p-4',
-        hover && 'transition-colors hover:border-zinc-700 cursor-pointer',
+        'rounded-lg border border-[var(--border)] bg-[var(--card)] p-4',
+        hover && 'transition-colors hover:border-[var(--muted-foreground)] cursor-pointer',
         onClick && 'w-full text-left',
         className
       )}
@@ -56,7 +56,7 @@ export function CardTitle({
   className,
 }: CardTitleProps): React.ReactElement {
   return (
-    <h3 className={cn('text-sm font-medium text-white', className)}>
+    <h3 className={cn('text-sm font-medium text-[var(--foreground)]', className)}>
       {children}
     </h3>
   )

@@ -48,6 +48,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       name: data.name,
       description: data.description,
       type: data.type,
+      group_id: data.groupId || null,
       interval_seconds: data.intervalSeconds,
       timeout_seconds: data.timeoutSeconds,
       retries: data.retries,
@@ -62,6 +63,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         serviceData.expected_status = data.expectedStatus
         serviceData.keyword = data.keyword
         serviceData.verify_ssl = data.verifySsl
+        serviceData.headers = data.headers
+        serviceData.body = data.body
         break
       case 'tcp':
         serviceData.hostname = data.hostname
@@ -82,6 +85,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         break
       case 'heartbeat':
         // Heartbeat services have minimal config
+        break
+      case 'ssl':
+        serviceData.hostname = data.hostname
+        serviceData.port = data.port
+        serviceData.ssl_expiry_warning_days = data.sslExpiryWarningDays
         break
     }
 

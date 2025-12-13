@@ -9,10 +9,10 @@ interface BadgeProps {
 }
 
 const variantClasses: Record<Variant, string> = {
-  default: 'bg-zinc-800 text-zinc-400',
-  success: 'bg-emerald-500/20 text-emerald-500',
-  error: 'bg-red-500/20 text-red-500',
-  warning: 'bg-amber-500/20 text-amber-500',
+  default: 'bg-[var(--accent)] text-[var(--muted)]',
+  success: 'bg-[var(--status-up)]/20 text-[var(--status-up)]',
+  error: 'bg-[var(--status-down)]/20 text-[var(--status-down)]',
+  warning: 'bg-[var(--status-warning)]/20 text-[var(--status-warning)]',
 }
 
 export function Badge({
